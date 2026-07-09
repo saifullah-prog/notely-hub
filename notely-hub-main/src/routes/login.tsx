@@ -49,7 +49,7 @@ function LoginPage() {
 
     setSubmitting(true);
     const fn = mode === "signin" ? signInWithPassword : signUpWithPassword;
-    const { error: authError } = await fn(email.trim(), password);
+    const { error: authError, session } = await fn(email.trim(), password);
     setSubmitting(false);
 
     if (authError) {
@@ -57,15 +57,17 @@ function LoginPage() {
       return;
     }
 
-    if (mode === "signup") {
-      setNotice(
-        "Account created. If email confirmation is enabled, check your inbox to verify, then log in.",
-      );
-      setMode("signin");
+    // Signed in right away (login, or open sign-up with confirmation off).
+    if (session) {
+      navigate({ to: "/" });
       return;
     }
 
-    navigate({ to: "/" });
+    // Sign-up succeeded but no session → email confirmation is enabled.
+    if (mode === "signup") {
+      setNotice("Account created! Check your inbox to confirm your email, then log in.");
+      setMode("signin");
+    }
   }
 
   return (
@@ -84,7 +86,7 @@ function LoginPage() {
         <p className="text-center text-sm text-muted-foreground mb-8">
           {mode === "signin"
             ? "Enter your details to continue."
-            : "Create an account to start listening."}
+            : "Anyone can join — sign up with your email and a password."}
         </p>
 
         {!isSupabaseConfigured && (
@@ -106,7 +108,7 @@ function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder="you@gmail.com"
               className="w-full rounded-md bg-elevated border border-input focus:border-primary px-3 py-2.5 text-sm outline-none transition"
             />
           </div>

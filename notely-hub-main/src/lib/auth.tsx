@@ -10,13 +10,17 @@ import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase, isSupabaseConfigured } from "./supabase";
 
+/** Result of a sign-in/sign-up attempt. `session` is set when the user is
+ * logged in immediately (i.e. email confirmation is disabled). */
+export type AuthResult = { error: string | null; session: Session | null };
+
 type AuthContextValue = {
   user: User | null;
   session: Session | null;
   /** True until the initial session lookup completes. */
   loading: boolean;
-  signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUpWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithPassword: (email: string, password: string) => Promise<AuthResult>;
+  signUpWithPassword: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
 };
 
@@ -58,12 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       loading,
       signInWithPassword: async (email, password) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error?.message ?? null };
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        return { error: error?.message ?? null, session: data.session ?? null };
       },
       signUpWithPassword: async (email, password) => {
-        const { error } = await supabase.auth.signUp({ email, password });
-        return { error: error?.message ?? null };
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        return { error: error?.message ?? null, session: data.session ?? null };
       },
       signOut: async () => {
         await supabase.auth.signOut();
