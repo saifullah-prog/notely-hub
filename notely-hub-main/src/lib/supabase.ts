@@ -48,3 +48,13 @@ export type Song = {
   cover_key: string;
   created_at: string;
 };
+
+/** Shape of a row in the public.playlists table. */
+export type PlaylistRow = {
+  id: string;
+  name: string;
+  sub: string | null;
+  cover_key: string;
+  artist: string | null;
+  created_at: string;
+};

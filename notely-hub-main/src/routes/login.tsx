@@ -69,7 +69,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-neutral-900 to-black text-foreground flex flex-col items-center px-4 py-10">
+    <div className="min-h-screen w-full bg-gradient-to-b from-elevated to-background text-foreground flex flex-col items-center px-4 py-10">
       <Link to="/" className="flex items-center gap-2 mb-10 text-xl font-bold">
         <span className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center">
           <Music2 className="size-5" />
@@ -77,7 +77,7 @@ function LoginPage() {
         Rocky
       </Link>
 
-      <div className="w-full max-w-sm rounded-xl bg-black/40 border border-border p-8">
+      <div className="w-full max-w-sm rounded-xl bg-card/60 border border-border p-8">
         <h1 className="text-2xl font-bold text-center mb-1">
           {mode === "signin" ? "Log in to Rocky" : "Sign up for Rocky"}
         </h1>
