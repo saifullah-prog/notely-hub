@@ -7,8 +7,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * prefixed with VITE_). Copy `.env.example` to `.env` and fill these in with the
  * values from your Supabase project → Settings → API.
  */
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Trim so a stray space/newline pasted into a hosting provider's env var
+// (a common cause of "Invalid API key") can't corrupt the credentials.
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
 /** True when both env vars are present, so UI can degrade gracefully. */
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
