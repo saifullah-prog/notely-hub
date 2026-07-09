@@ -46,8 +46,19 @@ export type Song = {
   album: string;
   duration: string;
   cover_key: string;
+  audio_path: string | null;
   created_at: string;
 };
+
+/**
+ * Resolves a storage path in the public `audio` bucket to a playable URL.
+ * Returns null when there's no path or Supabase isn't configured.
+ */
+export function audioUrlFromPath(path: string | null | undefined): string | null {
+  if (!path || !isSupabaseConfigured) return null;
+  const { data } = supabase.storage.from("audio").getPublicUrl(path);
+  return data.publicUrl || null;
+}
 
 /** Shape of a row in the public.playlists table. */
 export type PlaylistRow = {

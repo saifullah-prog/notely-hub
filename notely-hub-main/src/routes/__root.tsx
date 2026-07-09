@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../lib/auth";
 import { ThemeProvider, themeInitScript } from "../lib/theme";
+import { PlayerProvider } from "../lib/player";
 
 function NotFoundComponent() {
   return (
@@ -129,8 +130,10 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
+          <PlayerProvider>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </PlayerProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
