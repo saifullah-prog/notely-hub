@@ -139,6 +139,11 @@ if anything is found it **rejects** the submission and writes a generated
 daily at 03:00 UTC, and admins can trigger it immediately with **Run auto-review**
 on the Submissions tab.
 
+**Rejected submissions are auto-deleted** (migration
+[`0011_delete_rejected.sql`](supabase/migrations/0011_delete_rejected.sql)): a
+trigger removes any submission the moment its status becomes `rejected`, from any
+path (admin reject, auto-review, or the AI reviewer).
+
 - If the `create extension pg_cron` / `cron.schedule` lines error, enable pg_cron
   first: **Dashboard → Database → Extensions → pg_cron**, then re-run the file.
 - Extend the profanity list inside the function's `bad_words` array as needed.

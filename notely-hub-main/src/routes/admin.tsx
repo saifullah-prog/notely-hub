@@ -376,11 +376,11 @@ function SubmissionsManager() {
   }
 
   async function reject(s: Submission) {
-    const reason = prompt(`Reason for rejecting "${s.title}"? (shown to the creator)`, "Doesn't meet our content guidelines.");
-    if (reason === null) return; // cancelled
+    if (!confirm(`Reject and remove "${s.title}"? The submission will be deleted.`)) return;
     setBusyId(s.id);
+    // Setting status to 'rejected' fires a trigger that deletes the row (0011).
     await supabase.from("submissions")
-      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null, rejection_reason: reason || null })
+      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
       .eq("id", s.id);
     qc.invalidateQueries({ queryKey: ["submissions"] });
     setBusyId(null);
