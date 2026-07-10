@@ -8,6 +8,8 @@ import {
 } from "react";
 
 import type { Track } from "./songs";
+import { supabase, isSupabaseConfigured } from "./supabase";
+import { useAuth } from "./auth";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -59,6 +61,7 @@ function randomIndexExcept(length: number, except: number): number {
 }
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const endedRef = useRef<() => void>(() => {});
 
@@ -107,15 +110,36 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Load persisted likes.
+  // Load favourites: from Supabase when signed in (follows the account across
+  // devices), otherwise from localStorage.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LIKES_KEY);
-      if (raw) setLikes(JSON.parse(raw));
-    } catch {
-      /* ignore */
+    let active = true;
+    async function load() {
+      if (user && isSupabaseConfigured) {
+        const { data } = await supabase
+          .from("favorites")
+          .select("track_key")
+          .eq("user_id", user.id);
+        if (!active) return;
+        const map: Record<string, boolean> = {};
+        (data ?? []).forEach((r: { track_key: string }) => {
+          map[r.track_key] = true;
+        });
+        setLikes(map);
+      } else {
+        try {
+          const raw = localStorage.getItem(LIKES_KEY);
+          setLikes(raw ? JSON.parse(raw) : {});
+        } catch {
+          setLikes({});
+        }
+      }
     }
-  }, []);
+    load();
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   // Keep the audio element's volume/mute in sync.
   useEffect(() => {
@@ -224,15 +248,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     cycleRepeat: () =>
       setRepeat((r) => (r === "off" ? "all" : r === "all" ? "one" : "off")),
     toggleLike: (t) => {
-      setLikes((prev) => {
-        const next = { ...prev, [trackKey(t)]: !prev[trackKey(t)] };
+      const key = trackKey(t);
+      const nowLiked = !likes[key];
+      const next = { ...likes, [key]: nowLiked };
+      setLikes(next);
+      if (user && isSupabaseConfigured) {
+        if (nowLiked) {
+          void supabase.from("favorites").upsert({ user_id: user.id, track_key: key });
+        } else {
+          void supabase.from("favorites").delete().eq("user_id", user.id).eq("track_key", key);
+        }
+      } else {
         try {
           localStorage.setItem(LIKES_KEY, JSON.stringify(next));
         } catch {
           /* ignore */
         }
-        return next;
-      });
+      }
     },
     isLiked: (t) => Boolean(likes[trackKey(t)]),
   };

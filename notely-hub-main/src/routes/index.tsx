@@ -169,12 +169,14 @@ function RockyHome() {
           </button>
           {user ? (
             <>
-              <span
-                title={user.email ?? "Account"}
-                className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center font-bold text-sm uppercase"
+              <Link
+                to="/profile"
+                title={`${user.email ?? "Account"} — your profile`}
+                aria-label="Your profile"
+                className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center font-bold text-sm uppercase hover:scale-105 transition"
               >
                 {(user.email ?? "R").charAt(0)}
-              </span>
+              </Link>
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold"
