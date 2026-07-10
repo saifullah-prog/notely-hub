@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as PremiumRouteImport } from './routes/premium'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as CreatorRouteImport } from './routes/creator'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PremiumRoute = PremiumRouteImport.update({
+  id: '/premium',
+  path: '/premium',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/creator': typeof CreatorRoute
   '/login': typeof LoginRoute
+  '/premium': typeof PremiumRoute
   '/profile': typeof ProfileRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/creator': typeof CreatorRoute
   '/login': typeof LoginRoute
+  '/premium': typeof PremiumRoute
   '/profile': typeof ProfileRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,22 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/creator': typeof CreatorRoute
   '/login': typeof LoginRoute
+  '/premium': typeof PremiumRoute
   '/profile': typeof ProfileRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/creator' | '/login' | '/profile'
+  fullPaths: '/' | '/admin' | '/creator' | '/login' | '/premium' | '/profile'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/creator' | '/login' | '/profile'
-  id: '__root__' | '/' | '/admin' | '/creator' | '/login' | '/profile'
+  to: '/' | '/admin' | '/creator' | '/login' | '/premium' | '/profile'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/creator'
+    | '/login'
+    | '/premium'
+    | '/profile'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +92,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   CreatorRoute: typeof CreatorRoute
   LoginRoute: typeof LoginRoute
+  PremiumRoute: typeof PremiumRoute
   ProfileRoute: typeof ProfileRoute
 }
 
@@ -86,6 +103,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/premium': {
+      id: '/premium'
+      path: '/premium'
+      fullPath: '/premium'
+      preLoaderRoute: typeof PremiumRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -124,6 +148,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   CreatorRoute: CreatorRoute,
   LoginRoute: LoginRoute,
+  PremiumRoute: PremiumRoute,
   ProfileRoute: ProfileRoute,
 }
 export const routeTree = rootRouteImport

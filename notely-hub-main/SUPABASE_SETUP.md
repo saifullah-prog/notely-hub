@@ -148,6 +148,72 @@ on the Submissions tab.
   (Anthropic) or a fingerprint API (ACRCloud/AudD), then writes the verdict back
   to `submissions` — it needs those API keys as function secrets.
 
+## 8. Deep AI review (optional — transcribe + fingerprint + Claude)
+
+The rule-based reviewer (step 7 / migration 0008) only reads text. To have an AI
+actually **listen to the audio** — transcribe the lyrics and let Claude judge
+vulgarity + likely copyright — deploy the `ai-review` Edge Function
+([`supabase/functions/ai-review/index.ts`](supabase/functions/ai-review/index.ts)).
+
+**Prereqs:** run migration [`0009_ai_review.sql`](supabase/migrations/0009_ai_review.sql)
+(adds `ai_reviewed_at` + `ai_notes`), and have the [Supabase CLI](https://supabase.com/docs/guides/cli).
+
+**Deploy + set secrets:**
+```bash
+supabase functions deploy ai-review
+supabase secrets set \
+  ANTHROPIC_API_KEY=sk-ant-...        # Claude (judgment + rejection reason) — required \
+  TRANSCRIBE_KEY=sk-...               # OpenAI Whisper key (audio → lyrics) — optional \
+  CRON_SECRET=$(openssl rand -hex 16) # only if you schedule it (below)
+# SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
+```
+- Missing `TRANSCRIBE_KEY` → transcription is skipped (Claude judges on metadata
+  only). Missing `ANTHROPIC_API_KEY` → the function no-ops.
+- Copyright detection here is best-effort from lyrics/metadata (no audio
+  fingerprint service); to add true fingerprinting later, wire an ACRCloud/AudD
+  call into the function.
+- To use **Groq** instead of OpenAI for transcription, also set
+  `TRANSCRIBE_URL=https://api.groq.com/openai/v1/audio/transcriptions` and
+  `TRANSCRIBE_MODEL=whisper-large-v3`.
+
+**Use it:** in the admin **Submissions** tab, click **Deep AI review**. It
+examines submissions pending > 10 days (or pass `{ all_pending: true }` /
+`{ submission_id }` when invoking directly), writes an `ai_notes` summary on each,
+and **rejects** with a generated reason when it finds vulgarity or copyright.
+
+**Schedule it daily** (optional): uncomment the `pg_cron` block at the bottom of
+`0009_ai_review.sql`, fill in your project ref + `CRON_SECRET`, and run it.
+
+> Security: the API keys live as **function secrets**, never in the app bundle.
+> The function verifies the caller is an admin (or presents the cron secret)
+> before running, and only the `service_role` inside the function writes results.
+> This function is deployed/tested by you — it can't be verified from the app repo.
+
+## 9. Premium subscriptions (admin-verified manual payments)
+
+A manual monthly-subscription flow — no card gateway. The **admin** controls
+everything; **creators** pay externally and submit proof; the admin verifies.
+
+**Set it up:** run migration [`0010_subscriptions.sql`](supabase/migrations/0010_subscriptions.sql)
+(creates `payment_settings`, `payments`, and `profiles.premium_until` with RLS).
+
+**How it works:**
+1. Admin portal → **Premium** tab: set the **monthly amount**, **currency**,
+   **payment method**, **instructions** (your account details), and toggle
+   **subscriptions open/closed**. You can stop subscriptions or change the amount
+   anytime — creators only see what you set.
+2. A creator opens **Premium** (the crown button in the top bar, or "Explore
+   Premium") → sees your method + amount + instructions → pays you externally →
+   fills the **verify-my-payment** form (transaction id, sender name, amount).
+3. That submission appears in the admin **Premium** tab with a **pending badge**
+   (this is the "notification"). Admin clicks **Approve** → grants **1 month** of
+   premium (`profiles.premium_until`, extending an active sub), or **Reject**.
+
+Everything is enforced by RLS: creators can only see/insert their own payments;
+only admins change settings, verify payments, or set premium expiry. Premium
+status is available via the `premium_until` column for gating premium-only
+features later.
+
 ## Notes
 
 - **Email confirmation:** by default Supabase requires email confirmation on

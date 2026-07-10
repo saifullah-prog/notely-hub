@@ -4,7 +4,7 @@ import {
   Home, Search, Library, Heart, X, Music2,
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
   Volume2, Volume1, VolumeX, ListMusic, Maximize2,
-  LogOut, Palette, Check, PanelRightClose, PanelRightOpen, ShieldCheck, Disc3,
+  LogOut, Palette, Check, PanelRightClose, PanelRightOpen, ShieldCheck, Disc3, Crown,
 } from "lucide-react";
 
 import album1 from "@/assets/album1.jpg";
@@ -157,6 +157,14 @@ function RockyHome() {
               className="flex items-center gap-2 px-3 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold"
             >
               <Disc3 className="size-4" /> <span className="hidden lg:block">Studio</span>
+            </Link>
+          )}
+          {user && (
+            <Link
+              to="/premium"
+              className="flex items-center gap-2 px-3 py-2 rounded-full bg-foreground text-background text-sm font-bold hover:scale-105 transition"
+            >
+              <Crown className="size-4" /> <span className="hidden lg:block">Premium</span>
             </Link>
           )}
           {isAdmin && (

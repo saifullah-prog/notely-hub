@@ -20,6 +20,8 @@ export type Submission = {
   rights: RightsKind;
   owns_rights: boolean;
   rejection_reason: string | null;
+  ai_reviewed_at: string | null;
+  ai_notes: string | null;
   created_at: string;
   reviewed_at: string | null;
   reviewed_by: string | null;

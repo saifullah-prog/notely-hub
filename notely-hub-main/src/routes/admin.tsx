@@ -4,13 +4,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   ShieldCheck, Music2, Users, UserCog, Loader2, Trash2, Plus,
-  ArrowLeft, LogOut, Check, KeyRound, Mail, Inbox, CheckCircle2, XCircle, AlertTriangle,
+  ArrowLeft, LogOut, Check, KeyRound, Mail, Inbox, CheckCircle2, XCircle, AlertTriangle, Sparkles,
+  CreditCard, Power, Save,
 } from "lucide-react";
 
 import { supabase, audioUrlFromPath } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useIsAdmin, useProfiles, type Profile } from "@/lib/admin";
 import { useAllSubmissions, copyrightFlags, RIGHTS_LABEL, type Submission } from "@/lib/creator";
+import { useAllPayments, usePaymentSettings, type Payment } from "@/lib/payments";
 import { useSongs, type Track } from "@/lib/songs";
 import { coverByKey } from "@/lib/covers";
 
@@ -20,14 +22,16 @@ export const Route = createFileRoute("/admin")({
 });
 
 const COVER_KEYS = ["album1", "album2", "album3", "album4", "album5", "album6"] as const;
-type AdminTab = "songs" | "submissions" | "users" | "account";
+type AdminTab = "songs" | "submissions" | "premium" | "users" | "account";
 
 function AdminPortal() {
   const navigate = useNavigate();
   const { user, loading, signOut } = useAuth();
   const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
   const { data: submissions = [] } = useAllSubmissions(Boolean(isAdmin));
+  const { data: payments = [] } = useAllPayments(Boolean(isAdmin));
   const pendingCount = submissions.filter((s) => s.status === "pending").length;
+  const pendingPayments = payments.filter((p) => p.status === "pending").length;
   const [tab, setTab] = useState<AdminTab>("songs");
 
   // Not logged in → send to login.
@@ -66,6 +70,7 @@ function AdminPortal() {
   const tabs: { id: AdminTab; label: string; icon: typeof Music2; badge?: number }[] = [
     { id: "songs", label: "Songs", icon: Music2 },
     { id: "submissions", label: "Submissions", icon: Inbox, badge: pendingCount },
+    { id: "premium", label: "Premium", icon: CreditCard, badge: pendingPayments },
     { id: "users", label: "Users", icon: Users },
     { id: "account", label: "Account", icon: UserCog },
   ];
@@ -109,6 +114,7 @@ function AdminPortal() {
         <main className="flex-1 min-w-0">
           {tab === "songs" && <SongsManager />}
           {tab === "submissions" && <SubmissionsManager />}
+          {tab === "premium" && <PaymentsManager />}
           {tab === "users" && <UsersManager />}
           {tab === "account" && <AccountSection />}
         </main>
@@ -309,6 +315,7 @@ function SubmissionsManager() {
   const { data: songs = [] } = useSongs();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [autoBusy, setAutoBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
 
   const pending = subs.filter((s) => s.status === "pending");
@@ -324,6 +331,23 @@ function SubmissionsManager() {
       return;
     }
     setAutoMsg(`Auto-review complete — rejected ${data ?? 0} stale submission(s) (pending > 10 days).`);
+    qc.invalidateQueries({ queryKey: ["submissions"] });
+  }
+
+  async function runDeepReview() {
+    setAiBusy(true);
+    setAutoMsg(null);
+    // Calls the ai-review Edge Function (transcription + fingerprint + Claude).
+    const { data, error } = await supabase.functions.invoke("ai-review", { body: {} });
+    setAiBusy(false);
+    if (error) {
+      setAutoMsg(`Deep AI review failed: ${error.message}. Is the ai-review function deployed with its secrets?`);
+      return;
+    }
+    const result = data as { reviewed?: number; results?: { reject?: boolean }[] } | null;
+    const reviewed = result?.reviewed ?? 0;
+    const rejected = (result?.results ?? []).filter((r) => r.reject).length;
+    setAutoMsg(`Deep AI review complete — examined ${reviewed}, rejected ${rejected}.`);
     qc.invalidateQueries({ queryKey: ["submissions"] });
   }
 
@@ -391,6 +415,11 @@ function SubmissionsManager() {
           )}
         </div>
         {s.note && <p className="text-xs text-muted-foreground italic">“{s.note}”</p>}
+        {s.ai_notes && (
+          <p className="text-xs text-muted-foreground bg-elevated/40 rounded-md px-3 py-2 flex items-start gap-1.5">
+            <Sparkles className="size-3.5 mt-0.5 shrink-0 text-primary" /> {s.ai_notes}
+          </p>
+        )}
         {s.status === "rejected" && s.rejection_reason && (
           <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{s.rejection_reason}</p>
         )}
@@ -443,16 +472,26 @@ function SubmissionsManager() {
           <h1 className="text-2xl font-bold mb-1">Submissions</h1>
           <p className="text-sm text-muted-foreground">Tracks users submitted for publishing. Approving adds them to the catalog.</p>
         </div>
-        <div className="text-right">
-          <button
-            onClick={runAutoReview}
-            disabled={autoBusy}
-            title="Examine submissions pending over 10 days and auto-reject those with vulgarity or copyright issues"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold disabled:opacity-60"
-          >
-            {autoBusy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Run auto-review
-          </button>
-          {autoMsg && <p className="text-xs text-muted-foreground mt-1 max-w-xs">{autoMsg}</p>}
+        <div className="text-right space-y-1">
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={runAutoReview}
+              disabled={autoBusy || aiBusy}
+              title="Rule-based: examine submissions pending over 10 days and auto-reject those with vulgarity or copyright flags"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold disabled:opacity-60"
+            >
+              {autoBusy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Run auto-review
+            </button>
+            <button
+              onClick={runDeepReview}
+              disabled={autoBusy || aiBusy}
+              title="Deep AI: transcribe the audio and have Claude judge vulgarity/copyright (needs the ai-review Edge Function)"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60"
+            >
+              {aiBusy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Deep AI review
+            </button>
+          </div>
+          {autoMsg && <p className="text-xs text-muted-foreground max-w-xs">{autoMsg}</p>}
         </div>
       </div>
 
@@ -478,6 +517,182 @@ function SubmissionsManager() {
             </section>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/* ── Premium: payment settings + verification queue ───────── */
+
+function PaymentsManager() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { data: settings } = usePaymentSettings();
+  const { data: payments = [], isLoading } = useAllPayments(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [form, setForm] = useState({
+    subscriptions_open: false, amount: "0", currency: "USD", method: "", instructions: "",
+  });
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [savedSettings, setSavedSettings] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Load settings into the form once.
+  useEffect(() => {
+    if (settings) {
+      setForm({
+        subscriptions_open: settings.subscriptions_open,
+        amount: String(settings.amount ?? 0),
+        currency: settings.currency ?? "USD",
+        method: settings.method ?? "",
+        instructions: settings.instructions ?? "",
+      });
+      setSavedAt(settings.updated_at);
+    }
+  }, [settings]);
+
+  async function saveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSavedSettings(false);
+    const { error } = await supabase.from("payment_settings").update({
+      subscriptions_open: form.subscriptions_open,
+      amount: Number(form.amount) || 0,
+      currency: form.currency.trim() || "USD",
+      method: form.method.trim(),
+      instructions: form.instructions.trim(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", 1);
+    setSaving(false);
+    if (!error) {
+      setSavedSettings(true);
+      qc.invalidateQueries({ queryKey: ["payment-settings"] });
+    }
+  }
+
+  async function approve(p: Payment) {
+    setBusyId(p.id);
+    // Grant one month of premium, extending an active subscription if present.
+    const { data: prof } = await supabase.from("profiles").select("premium_until").eq("id", p.user_id).maybeSingle();
+    const current = prof?.premium_until ? new Date(prof.premium_until) : null;
+    const base = current && current.getTime() > Date.now() ? current : new Date();
+    const until = new Date(base);
+    until.setMonth(until.getMonth() + 1);
+    await supabase.from("profiles").update({ premium_until: until.toISOString() }).eq("id", p.user_id);
+    await supabase.from("payments")
+      .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
+      .eq("id", p.id);
+    qc.invalidateQueries({ queryKey: ["payments"] });
+    setBusyId(null);
+  }
+
+  async function reject(p: Payment) {
+    setBusyId(p.id);
+    await supabase.from("payments")
+      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
+      .eq("id", p.id);
+    qc.invalidateQueries({ queryKey: ["payments"] });
+    setBusyId(null);
+  }
+
+  const pending = payments.filter((p) => p.status === "pending");
+  const reviewed = payments.filter((p) => p.status !== "pending");
+  const field = "w-full rounded-md bg-elevated border border-input focus:border-primary px-3 py-2 text-sm outline-none transition";
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Premium subscriptions</h1>
+        <p className="text-sm text-muted-foreground">Set how creators pay, and verify their transfers.</p>
+      </div>
+
+      {/* Settings */}
+      <form onSubmit={saveSettings} className="rounded-lg border border-border bg-card/40 p-5 space-y-4">
+        <h2 className="font-semibold flex items-center gap-2"><Power className="size-4" /> Payment settings</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="accent-primary" checked={form.subscriptions_open}
+            onChange={(e) => setForm((f) => ({ ...f, subscriptions_open: e.target.checked }))} />
+          Subscriptions are <span className="font-semibold">{form.subscriptions_open ? "OPEN" : "CLOSED"}</span> (creators can submit payments)
+        </label>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <label className="space-y-1 text-sm"><span className="font-medium">Monthly amount</span>
+            <input className={field} type="number" min="0" step="0.01" value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+          </label>
+          <label className="space-y-1 text-sm"><span className="font-medium">Currency</span>
+            <input className={field} value={form.currency}
+              onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))} placeholder="USD / PKR / …" />
+          </label>
+          <label className="space-y-1 text-sm sm:col-span-2"><span className="font-medium">Payment method</span>
+            <input className={field} value={form.method}
+              onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))} placeholder="Bank transfer / JazzCash / PayPal …" />
+          </label>
+          <label className="space-y-1 text-sm sm:col-span-2"><span className="font-medium">Instructions (account details creators pay to)</span>
+            <textarea className={`${field} min-h-20`} value={form.instructions}
+              onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
+              placeholder="e.g. Account title, number/IBAN, or PayPal email. Ask creators to include their email as the reference." />
+          </label>
+        </div>
+        <div className="flex items-center gap-3">
+          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground font-bold disabled:opacity-60">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings
+          </button>
+          {savedSettings && <span className="text-sm text-primary flex items-center gap-1"><Check className="size-4" /> Saved.</span>}
+          {savedAt && <span className="text-xs text-muted-foreground">Updated {new Date(savedAt).toLocaleString()}</span>}
+        </div>
+      </form>
+
+      {/* Verification queue */}
+      <div className="space-y-3">
+        <h2 className="font-semibold flex items-center gap-2"><CreditCard className="size-4" /> Payments to verify ({pending.length})</h2>
+        {isLoading ? (
+          <Loader2 className="size-5 animate-spin" />
+        ) : pending.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No payments waiting for verification.</p>
+        ) : (
+          pending.map((p) => <PaymentRow key={p.id} p={p} busy={busyId === p.id} onApprove={() => approve(p)} onReject={() => reject(p)} />)
+        )}
+        {reviewed.length > 0 && (
+          <>
+            <h3 className="font-semibold text-muted-foreground pt-3">Reviewed</h3>
+            {reviewed.map((p) => <PaymentRow key={p.id} p={p} />)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaymentRow({ p, busy, onApprove, onReject }: { p: Payment; busy?: boolean; onApprove?: () => void; onReject?: () => void }) {
+  const badge: Record<string, string> = {
+    pending: "bg-yellow-500/15 text-yellow-500",
+    approved: "bg-primary/15 text-primary",
+    rejected: "bg-destructive/15 text-destructive",
+  };
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4 space-y-2">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">{p.amount} {p.currency} <span className="text-muted-foreground font-normal">· {p.method || "—"}</span></div>
+          <div className="text-xs text-muted-foreground truncate">
+            Ref: {p.reference || "—"} · From: {p.sender_name || "—"} · {new Date(p.created_at).toLocaleString()}
+          </div>
+        </div>
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${badge[p.status]}`}>{p.status}</span>
+      </div>
+      {p.note && <p className="text-xs text-muted-foreground italic">“{p.note}”</p>}
+      {p.status === "pending" && onApprove && (
+        <div className="flex gap-2">
+          <button onClick={onApprove} disabled={busy}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} Approve (grant 1 month)
+          </button>
+          <button onClick={onReject} disabled={busy}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold disabled:opacity-60">
+            <XCircle className="size-4" /> Reject
+          </button>
+        </div>
       )}
     </div>
   );
