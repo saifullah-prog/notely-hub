@@ -4,13 +4,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   ShieldCheck, Music2, Users, UserCog, Loader2, Trash2, Plus,
-  ArrowLeft, LogOut, Check, KeyRound, Mail,
+  ArrowLeft, LogOut, Check, KeyRound, Mail, Inbox, CheckCircle2, XCircle,
 } from "lucide-react";
 
-import { supabase } from "@/lib/supabase";
+import { supabase, audioUrlFromPath } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useIsAdmin, useProfiles, type Profile } from "@/lib/admin";
+import { useAllSubmissions, type Submission } from "@/lib/creator";
 import { useSongs, type Track } from "@/lib/songs";
+import { coverByKey } from "@/lib/covers";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin — Rocky" }] }),
@@ -18,12 +20,14 @@ export const Route = createFileRoute("/admin")({
 });
 
 const COVER_KEYS = ["album1", "album2", "album3", "album4", "album5", "album6"] as const;
-type AdminTab = "songs" | "users" | "account";
+type AdminTab = "songs" | "submissions" | "users" | "account";
 
 function AdminPortal() {
   const navigate = useNavigate();
   const { user, loading, signOut } = useAuth();
   const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
+  const { data: submissions = [] } = useAllSubmissions(Boolean(isAdmin));
+  const pendingCount = submissions.filter((s) => s.status === "pending").length;
   const [tab, setTab] = useState<AdminTab>("songs");
 
   // Not logged in → send to login.
@@ -59,8 +63,9 @@ function AdminPortal() {
     );
   }
 
-  const tabs: { id: AdminTab; label: string; icon: typeof Music2 }[] = [
+  const tabs: { id: AdminTab; label: string; icon: typeof Music2; badge?: number }[] = [
     { id: "songs", label: "Songs", icon: Music2 },
+    { id: "submissions", label: "Submissions", icon: Inbox, badge: pendingCount },
     { id: "users", label: "Users", icon: Users },
     { id: "account", label: "Account", icon: UserCog },
   ];
@@ -94,12 +99,16 @@ function AdminPortal() {
               }`}
             >
               <t.icon className="size-4" /> {t.label}
+              {t.badge ? (
+                <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">{t.badge}</span>
+              ) : null}
             </button>
           ))}
         </nav>
 
         <main className="flex-1 min-w-0">
           {tab === "songs" && <SongsManager />}
+          {tab === "submissions" && <SubmissionsManager />}
           {tab === "users" && <UsersManager />}
           {tab === "account" && <AccountSection />}
         </main>
@@ -287,6 +296,111 @@ function UsersManager() {
         Note: fully deleting or banning a user requires the service_role key and a server function — not done
         from the browser for security. Removing admin access is safe and immediate.
       </p>
+    </div>
+  );
+}
+
+/* ── Submissions review ───────────────────────────────────── */
+
+function SubmissionsManager() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { data: subs = [], isLoading, error } = useAllSubmissions(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const pending = subs.filter((s) => s.status === "pending");
+  const reviewed = subs.filter((s) => s.status !== "pending");
+
+  async function approve(s: Submission) {
+    setBusyId(s.id);
+    // Publish the track into the public catalog.
+    const ins = await supabase.from("songs").insert({
+      title: s.title, artist: s.artist, album: s.album, duration: s.duration,
+      cover_key: s.cover_key, audio_path: s.audio_path,
+    });
+    if (!ins.error || ins.error.message.includes("duplicate")) {
+      await supabase.from("submissions")
+        .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
+        .eq("id", s.id);
+      qc.invalidateQueries({ queryKey: ["songs"] });
+      qc.invalidateQueries({ queryKey: ["submissions"] });
+    }
+    setBusyId(null);
+  }
+
+  async function reject(s: Submission) {
+    setBusyId(s.id);
+    await supabase.from("submissions")
+      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
+      .eq("id", s.id);
+    qc.invalidateQueries({ queryKey: ["submissions"] });
+    setBusyId(null);
+  }
+
+  function Card({ s }: { s: Submission }) {
+    const url = audioUrlFromPath(s.audio_path);
+    return (
+      <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <img src={coverByKey[s.cover_key] ?? coverByKey.album1} alt="" width={48} height={48} className="size-12 rounded object-cover" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold truncate">{s.title}</div>
+            <div className="text-xs text-muted-foreground truncate">{s.artist} • {s.album} • {s.duration}</div>
+          </div>
+          {s.status !== "pending" && (
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${s.status === "approved" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+              {s.status}
+            </span>
+          )}
+        </div>
+        {s.note && <p className="text-xs text-muted-foreground italic">“{s.note}”</p>}
+        {url ? <audio controls src={url} className="w-full" /> : <p className="text-xs text-destructive">No audio file.</p>}
+        {s.status === "pending" && (
+          <div className="flex gap-2">
+            <button onClick={() => approve(s)} disabled={busyId === s.id}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-60">
+              {busyId === s.id ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} Approve & publish
+            </button>
+            <button onClick={() => reject(s)} disabled={busyId === s.id}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold disabled:opacity-60">
+              <XCircle className="size-4" /> Reject
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold mb-1">Submissions</h1>
+        <p className="text-sm text-muted-foreground">Tracks users submitted for publishing. Approving adds them to the catalog.</p>
+      </div>
+
+      {isLoading ? (
+        <Loader2 className="size-5 animate-spin" />
+      ) : error ? (
+        <p className="text-sm text-destructive">Couldn't load submissions.</p>
+      ) : (
+        <>
+          <section className="space-y-3">
+            <h2 className="font-semibold flex items-center gap-2"><Inbox className="size-4" /> Pending ({pending.length})</h2>
+            {pending.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing waiting for review.</p>
+            ) : (
+              pending.map((s) => <Card key={s.id} s={s} />)
+            )}
+          </section>
+
+          {reviewed.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="font-semibold text-muted-foreground">Reviewed</h2>
+              {reviewed.map((s) => <Card key={s.id} s={s} />)}
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }

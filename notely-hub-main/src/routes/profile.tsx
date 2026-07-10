@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Heart, Play, Pause, Loader2, ArrowLeft, LogOut, UserCog, KeyRound, Mail, ListMusic,
+  Heart, Play, Pause, Loader2, ArrowLeft, LogOut, UserCog, KeyRound, Mail, ListMusic, Disc3,
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -71,6 +71,12 @@ function ProfilePage() {
               <t.icon className="size-4" /> {t.label}
             </button>
           ))}
+          <Link
+            to="/creator"
+            className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-elevated/60 transition"
+          >
+            <Disc3 className="size-4" /> Creator Studio
+          </Link>
         </nav>
 
         <main className="flex-1 min-w-0">

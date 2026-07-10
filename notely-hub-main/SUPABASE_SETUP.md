@@ -103,6 +103,24 @@ your account (change email / password).
 - Fully deleting/banning auth users needs the `service_role` key + a server
   function and is intentionally **not** done from the browser.
 
+## 7. Creator studio (user uploads → admin approval)
+
+Any signed-in user can open **Creator Studio** (the **Studio** button in the top
+bar, or from their profile) to record audio in the browser or upload a file, add
+details, and **submit a track for publishing**. Each submission lands in the
+**admin portal → Submissions** tab (with a pending-count badge); an admin plays
+it and **Approve & publish** (adds it to the public catalog) or **Reject**.
+
+**Set it up:** run migration [`0006_submissions.sql`](supabase/migrations/0006_submissions.sql)
+(SQL Editor → paste → Run). It creates a `submissions` table with RLS so users
+only see/insert their own submissions while admins can review all of them.
+
+- Audio files upload to the existing public `audio` bucket under
+  `submissions/<user_id>/…` (uses the authenticated-write policy from migration
+  0003), so no extra storage setup is needed.
+- In-browser recordings are WebM/Opus (works in Chromium/Firefox); users can also
+  upload MP3/other files. Recording requires HTTPS (or localhost).
+
 ## Notes
 
 - **Email confirmation:** by default Supabase requires email confirmation on
