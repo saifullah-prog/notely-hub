@@ -73,6 +73,36 @@ bun dev
   configured or is unreachable, it automatically falls back to the bundled song
   list, so the UI never breaks.
 
+## 6. Admin portal
+
+The app has an admin portal at **`/admin`** for adding songs, managing users, and
+your account (change email / password).
+
+**Set it up:**
+1. Run migration [`0004_admin.sql`](supabase/migrations/0004_admin.sql) (SQL Editor
+   → paste → Run). It creates a `profiles` table, an auto-profile trigger, and
+   **admin-only write policies** on the catalog.
+2. **Sign up in the app first** with the email you want to be admin (so a profile
+   row exists), then edit the last line of `0004_admin.sql` (or run it directly):
+   ```sql
+   update public.profiles set is_admin = true where email = 'YOUR-EMAIL';
+   ```
+3. Reload the app — an **Admin** button appears in the top bar for admins, linking
+   to `/admin`.
+
+**Security model (protection against tampering):**
+- Authorization is enforced by **Row Level Security in the database**, not just the
+  UI. Only users with `is_admin = true` can INSERT/UPDATE/DELETE songs, playlists,
+  albums, artists, or change other users' roles. A modified/hostile client still
+  can't write — Postgres rejects it.
+- `public.is_admin()` is a `SECURITY DEFINER` function, so policies check admin
+  status without recursion and **without ever exposing the `service_role` key**.
+- The `/admin` route also guards on the client (redirects non-users to `/login`,
+  shows "Not authorized" for non-admins) as a convenience layer.
+- Inputs are validated with `zod`; React escapes output (no XSS via song fields).
+- Fully deleting/banning auth users needs the `service_role` key + a server
+  function and is intentionally **not** done from the browser.
+
 ## Notes
 
 - **Email confirmation:** by default Supabase requires email confirmation on

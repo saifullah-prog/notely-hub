@@ -4,7 +4,7 @@ import {
   Home, Search, Library, Heart, X, Music2,
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
   Volume2, Volume1, VolumeX, ListMusic, Maximize2,
-  LogOut, Palette, Check, PanelRightClose, PanelRightOpen,
+  LogOut, Palette, Check, PanelRightClose, PanelRightOpen, ShieldCheck,
 } from "lucide-react";
 
 import album1 from "@/assets/album1.jpg";
@@ -15,6 +15,7 @@ import album5 from "@/assets/album5.jpg";
 import album6 from "@/assets/album6.jpg";
 
 import { useAuth } from "@/lib/auth";
+import { useIsAdmin } from "@/lib/admin";
 import { useSongs, fallbackTracks, type Track } from "@/lib/songs";
 import { usePlaylists, fallbackPlaylists, type Playlist } from "@/lib/playlists";
 import { useTheme, THEMES, type ThemeId } from "@/lib/theme";
@@ -63,6 +64,7 @@ function RockyHome() {
   const { data: playlists = fallbackPlaylists } = usePlaylists();
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { data: isAdmin } = useIsAdmin();
 
   const artists = useMemo<Artist[]>(
     () =>
@@ -149,6 +151,14 @@ function RockyHome() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-2 px-3 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold"
+            >
+              <ShieldCheck className="size-4" /> <span className="hidden lg:block">Admin</span>
+            </Link>
+          )}
           <ThemeSwitcher theme={theme} setTheme={setTheme} />
           <button
             onClick={() => setPanelOpen((o) => !o)}
