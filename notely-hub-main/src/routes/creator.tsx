@@ -346,17 +346,24 @@ function MySubmissions() {
       ) : (
         <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
           {subs.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 px-4 py-3">
-              <img src={coverByKey[s.cover_key] ?? coverByKey.album1} alt="" width={40} height={40} className="size-10 rounded object-cover" />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{s.title}</div>
-                <div className="text-xs text-muted-foreground truncate">{s.artist} • {s.album} • {s.duration}</div>
+            <div key={s.id} className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <img src={coverByKey[s.cover_key] ?? coverByKey.album1} alt="" width={40} height={40} className="size-10 rounded object-cover" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{s.title}</div>
+                  <div className="text-xs text-muted-foreground truncate">{s.artist} • {s.album} • {s.duration}</div>
+                </div>
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_STYLE[s.status]}`}>{s.status}</span>
+                {s.status === "pending" && (
+                  <button onClick={() => remove(s)} aria-label="Withdraw" className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
               </div>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_STYLE[s.status]}`}>{s.status}</span>
-              {s.status === "pending" && (
-                <button onClick={() => remove(s)} aria-label="Withdraw" className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="size-4" />
-                </button>
+              {s.status === "rejected" && s.rejection_reason && (
+                <p className="mt-2 ml-13 text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                  {s.rejection_reason}
+                </p>
               )}
             </div>
           ))}

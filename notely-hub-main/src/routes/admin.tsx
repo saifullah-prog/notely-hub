@@ -308,9 +308,24 @@ function SubmissionsManager() {
   const { data: subs = [], isLoading, error } = useAllSubmissions(true);
   const { data: songs = [] } = useSongs();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoMsg, setAutoMsg] = useState<string | null>(null);
 
   const pending = subs.filter((s) => s.status === "pending");
   const reviewed = subs.filter((s) => s.status !== "pending");
+
+  async function runAutoReview() {
+    setAutoBusy(true);
+    setAutoMsg(null);
+    const { data, error } = await supabase.rpc("auto_review_stale_submissions");
+    setAutoBusy(false);
+    if (error) {
+      setAutoMsg(`Auto-review failed: ${error.message}`);
+      return;
+    }
+    setAutoMsg(`Auto-review complete — rejected ${data ?? 0} stale submission(s) (pending > 10 days).`);
+    qc.invalidateQueries({ queryKey: ["submissions"] });
+  }
 
   async function approve(s: Submission) {
     const flags = copyrightFlags(s, songs);
@@ -337,9 +352,11 @@ function SubmissionsManager() {
   }
 
   async function reject(s: Submission) {
+    const reason = prompt(`Reason for rejecting "${s.title}"? (shown to the creator)`, "Doesn't meet our content guidelines.");
+    if (reason === null) return; // cancelled
     setBusyId(s.id);
     await supabase.from("submissions")
-      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null })
+      .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user?.id ?? null, rejection_reason: reason || null })
       .eq("id", s.id);
     qc.invalidateQueries({ queryKey: ["submissions"] });
     setBusyId(null);
@@ -374,6 +391,9 @@ function SubmissionsManager() {
           )}
         </div>
         {s.note && <p className="text-xs text-muted-foreground italic">“{s.note}”</p>}
+        {s.status === "rejected" && s.rejection_reason && (
+          <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{s.rejection_reason}</p>
+        )}
         {url ? <audio controls src={url} className="w-full" /> : <p className="text-xs text-destructive">No audio file.</p>}
 
         {/* Copyright check */}
@@ -418,9 +438,22 @@ function SubmissionsManager() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold mb-1">Submissions</h1>
-        <p className="text-sm text-muted-foreground">Tracks users submitted for publishing. Approving adds them to the catalog.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Submissions</h1>
+          <p className="text-sm text-muted-foreground">Tracks users submitted for publishing. Approving adds them to the catalog.</p>
+        </div>
+        <div className="text-right">
+          <button
+            onClick={runAutoReview}
+            disabled={autoBusy}
+            title="Examine submissions pending over 10 days and auto-reject those with vulgarity or copyright issues"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-elevated hover:bg-secondary text-sm font-semibold disabled:opacity-60"
+          >
+            {autoBusy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Run auto-review
+          </button>
+          {autoMsg && <p className="text-xs text-muted-foreground mt-1 max-w-xs">{autoMsg}</p>}
+        </div>
       </div>
 
       {isLoading ? (

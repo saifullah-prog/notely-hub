@@ -130,6 +130,24 @@ and asks for confirmation before publishing anything with a HIGH flag. This is a
 lightweight safeguard, not real audio fingerprinting (which would need an
 external service like ACRCloud/AudD + an API key).
 
+**Automated 10-day review** (migration [`0008_auto_review.sql`](supabase/migrations/0008_auto_review.sql)):
+submissions left pending for more than 10 days are examined automatically. The
+`auto_review_stale_submissions()` function scans each one's text
+(title/artist/album/note) for profanity/slurs and applies the copyright checks;
+if anything is found it **rejects** the submission and writes a generated
+`rejection_reason` the creator sees in *My submissions*. A **pg_cron** job runs it
+daily at 03:00 UTC, and admins can trigger it immediately with **Run auto-review**
+on the Submissions tab.
+
+- If the `create extension pg_cron` / `cron.schedule` lines error, enable pg_cron
+  first: **Dashboard → Database → Extensions → pg_cron**, then re-run the file.
+- Extend the profanity list inside the function's `bad_words` array as needed.
+- **This examines text + catalog metadata, not the audio.** To have an AI listen
+  to the actual recording for vulgar lyrics or copyright, add a Supabase Edge
+  Function that transcribes the audio (e.g. Whisper) and/or calls an LLM
+  (Anthropic) or a fingerprint API (ACRCloud/AudD), then writes the verdict back
+  to `submissions` — it needs those API keys as function secrets.
+
 ## Notes
 
 - **Email confirmation:** by default Supabase requires email confirmation on
