@@ -121,6 +121,15 @@ only see/insert their own submissions while admins can review all of them.
 - In-browser recordings are WebM/Opus (works in Chromium/Firefox); users can also
   upload MP3/other files. Recording requires HTTPS (or localhost).
 
+**Copyright awareness** (migration [`0007_submission_rights.sql`](supabase/migrations/0007_submission_rights.sql)):
+creators must declare rights (original / licensed / cover / unsure) and tick an
+ownership confirmation before submitting. The admin's review shows this
+declaration plus automatic heuristic flags — missing attestation, declared
+covers, duplicate title/artist, artist-name collisions (impersonation risk) —
+and asks for confirmation before publishing anything with a HIGH flag. This is a
+lightweight safeguard, not real audio fingerprinting (which would need an
+external service like ACRCloud/AudD + an API key).
+
 ## Notes
 
 - **Email confirmation:** by default Supabase requires email confirmation on

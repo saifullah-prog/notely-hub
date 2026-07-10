@@ -8,7 +8,10 @@ import {
 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { useMySubmissions, readAudioDuration, COVER_KEYS, type Submission } from "@/lib/creator";
+import {
+  useMySubmissions, readAudioDuration, COVER_KEYS, RIGHTS_LABEL,
+  type Submission, type RightsKind,
+} from "@/lib/creator";
 import { coverByKey } from "@/lib/covers";
 
 export const Route = createFileRoute("/creator")({
@@ -92,6 +95,8 @@ function NewTrack({ onSubmitted }: { onSubmitted: () => void }) {
   const [form, setForm] = useState({
     title: "", artist: defaultArtist, album: "", duration: "", cover_key: "album1", note: "",
   });
+  const [rights, setRights] = useState<RightsKind>("original");
+  const [ownsRights, setOwnsRights] = useState(false);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState("");
@@ -170,6 +175,7 @@ function NewTrack({ onSubmitted }: { onSubmitted: () => void }) {
     }
     const duration = form.duration.trim() || "0:00";
     if (!/^\d{1,2}:\d{2}$/.test(duration)) return setError("Duration must look like 3:42.");
+    if (!ownsRights) return setError("Please confirm you own or have the rights to distribute this audio.");
 
     setBusy(true);
     const path = `submissions/${user.id}/${crypto.randomUUID()}.${extFor(blob, sourceName)}`;
@@ -190,12 +196,16 @@ function NewTrack({ onSubmitted }: { onSubmitted: () => void }) {
       cover_key: form.cover_key,
       audio_path: path,
       note: form.note.trim() || null,
+      rights,
+      owns_rights: ownsRights,
     });
     setBusy(false);
     if (ins.error) return setError(ins.error.message);
 
     setNotice("Submitted! An admin will review it for publishing.");
     setForm({ title: "", artist: defaultArtist, album: "", duration: "", cover_key: "album1", note: "" });
+    setRights("original");
+    setOwnsRights(false);
     setBlob(null);
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
@@ -268,10 +278,31 @@ function NewTrack({ onSubmitted }: { onSubmitted: () => void }) {
         </div>
       </div>
 
+      {/* Rights & copyright */}
+      <div className="rounded-lg border border-border bg-card/40 p-5 space-y-4">
+        <h2 className="font-semibold flex items-center gap-2"><ShieldCheck className="size-4" /> Rights &amp; copyright</h2>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium mb-1">This track is:</legend>
+          {(Object.keys(RIGHTS_LABEL) as RightsKind[]).map((r) => (
+            <label key={r} className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="radio" name="rights" value={r} checked={rights === r} onChange={() => setRights(r)} className="accent-primary" />
+              {RIGHTS_LABEL[r]}
+            </label>
+          ))}
+        </fieldset>
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={ownsRights} onChange={(e) => setOwnsRights(e.target.checked)} className="mt-0.5 accent-primary" />
+          <span>I confirm I own or have the rights to distribute this audio, and it doesn't infringe anyone's copyright.</span>
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Your declaration is shown to the reviewer. Submitting content you don't have rights to may get it rejected and your account restricted.
+        </p>
+      </div>
+
       {error && <p className="text-sm text-destructive">{error}</p>}
       {notice && <p className="text-sm text-primary flex items-center gap-1"><Check className="size-4" /> {notice}</p>}
 
-      <button type="submit" disabled={busy} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-bold disabled:opacity-60">
+      <button type="submit" disabled={busy || !ownsRights} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-bold disabled:opacity-60">
         {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Submit for approval
       </button>
     </form>

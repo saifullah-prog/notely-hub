@@ -4,13 +4,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   ShieldCheck, Music2, Users, UserCog, Loader2, Trash2, Plus,
-  ArrowLeft, LogOut, Check, KeyRound, Mail, Inbox, CheckCircle2, XCircle,
+  ArrowLeft, LogOut, Check, KeyRound, Mail, Inbox, CheckCircle2, XCircle, AlertTriangle,
 } from "lucide-react";
 
 import { supabase, audioUrlFromPath } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useIsAdmin, useProfiles, type Profile } from "@/lib/admin";
-import { useAllSubmissions, type Submission } from "@/lib/creator";
+import { useAllSubmissions, copyrightFlags, RIGHTS_LABEL, type Submission } from "@/lib/creator";
 import { useSongs, type Track } from "@/lib/songs";
 import { coverByKey } from "@/lib/covers";
 
@@ -306,12 +306,20 @@ function SubmissionsManager() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const { data: subs = [], isLoading, error } = useAllSubmissions(true);
+  const { data: songs = [] } = useSongs();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const pending = subs.filter((s) => s.status === "pending");
   const reviewed = subs.filter((s) => s.status !== "pending");
 
   async function approve(s: Submission) {
+    const flags = copyrightFlags(s, songs);
+    if (
+      flags.some((f) => f.level === "high") &&
+      !confirm("This submission has HIGH copyright warnings. Approve and publish it anyway?")
+    ) {
+      return;
+    }
     setBusyId(s.id);
     // Publish the track into the public catalog.
     const ins = await supabase.from("songs").insert({
@@ -339,14 +347,26 @@ function SubmissionsManager() {
 
   function Card({ s }: { s: Submission }) {
     const url = audioUrlFromPath(s.audio_path);
+    const flags = copyrightFlags(s, songs);
+    const hasHigh = flags.some((f) => f.level === "high");
+    const flagStyle: Record<string, string> = {
+      high: "text-destructive",
+      medium: "text-yellow-500",
+      info: "text-muted-foreground",
+    };
     return (
-      <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+      <div className={`rounded-lg border bg-card/40 p-4 space-y-3 ${hasHigh ? "border-destructive/50" : "border-border"}`}>
         <div className="flex items-center gap-3">
           <img src={coverByKey[s.cover_key] ?? coverByKey.album1} alt="" width={48} height={48} className="size-12 rounded object-cover" />
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold truncate">{s.title}</div>
             <div className="text-xs text-muted-foreground truncate">{s.artist} • {s.album} • {s.duration}</div>
           </div>
+          {hasHigh && (
+            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-destructive/15 text-destructive flex items-center gap-1">
+              <AlertTriangle className="size-3.5" /> Copyright
+            </span>
+          )}
           {s.status !== "pending" && (
             <span className={`text-xs font-semibold px-2 py-1 rounded-full ${s.status === "approved" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
               {s.status}
@@ -355,6 +375,31 @@ function SubmissionsManager() {
         </div>
         {s.note && <p className="text-xs text-muted-foreground italic">“{s.note}”</p>}
         {url ? <audio controls src={url} className="w-full" /> : <p className="text-xs text-destructive">No audio file.</p>}
+
+        {/* Copyright check */}
+        <div className="rounded-md border border-border bg-elevated/40 p-3 space-y-1.5">
+          <div className="text-xs font-semibold flex items-center gap-1.5">
+            <ShieldCheck className="size-3.5" /> Copyright check
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Declared: <span className="text-foreground">{RIGHTS_LABEL[s.rights]}</span> ·{" "}
+            Ownership {s.owns_rights
+              ? <span className="text-primary font-medium">confirmed</span>
+              : <span className="text-destructive font-medium">NOT confirmed</span>}
+          </div>
+          {flags.length === 0 ? (
+            <div className="text-xs text-primary flex items-center gap-1"><Check className="size-3.5" /> No automatic flags.</div>
+          ) : (
+            <ul className="space-y-1">
+              {flags.map((f, i) => (
+                <li key={i} className={`text-xs flex items-start gap-1.5 ${flagStyle[f.level]}`}>
+                  <AlertTriangle className="size-3.5 mt-0.5 shrink-0" /> {f.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {s.status === "pending" && (
           <div className="flex gap-2">
             <button onClick={() => approve(s)} disabled={busyId === s.id}
