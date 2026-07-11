@@ -7,17 +7,11 @@ import {
   LogOut, Palette, Check, PanelRightClose, PanelRightOpen, ShieldCheck, Disc3, Crown,
 } from "lucide-react";
 
-import album1 from "@/assets/album1.jpg";
-import album2 from "@/assets/album2.jpg";
-import album3 from "@/assets/album3.jpg";
-import album4 from "@/assets/album4.jpg";
-import album5 from "@/assets/album5.jpg";
-import album6 from "@/assets/album6.jpg";
-
 import { useAuth } from "@/lib/auth";
 import { useIsAdmin } from "@/lib/admin";
 import { useSongs, fallbackTracks, type Track } from "@/lib/songs";
 import { usePlaylists, fallbackPlaylists, type Playlist } from "@/lib/playlists";
+import { useAlbums, fallbackAlbums, type Album } from "@/lib/albums";
 import { useTheme, THEMES, type ThemeId } from "@/lib/theme";
 import { usePlayer, trackKey, formatTime } from "@/lib/player";
 
@@ -33,16 +27,6 @@ export const Route = createFileRoute("/")({
   }),
   component: RockyHome,
 });
-
-const albums = [
-  { title: "Neon Peaks", artist: "Aurora Wave", cover: album1 },
-  { title: "Sunset Drive", artist: "Palm Coast", cover: album2 },
-  { title: "Quiet Hours", artist: "Vera Lune", cover: album3 },
-  { title: "Cosmic Drift", artist: "Nebula 9", cover: album4 },
-  { title: "Concrete Kings", artist: "Block Party", cover: album5 },
-  { title: "Cotton Sky", artist: "June Bloom", cover: album6 },
-];
-type Album = (typeof albums)[number];
 
 type Artist = { name: string; cover: string };
 
@@ -62,6 +46,7 @@ function RockyHome() {
 
   const { data: tracks = fallbackTracks } = useSongs();
   const { data: playlists = fallbackPlaylists } = usePlaylists();
+  const { data: albums = fallbackAlbums } = useAlbums();
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const { data: isAdmin } = useIsAdmin();
@@ -89,7 +74,7 @@ function RockyHome() {
       albums: albums.filter((a) => [a.title, a.artist].some((v) => v.toLowerCase().includes(q))),
       playlists: playlists.filter((p) => [p.name, p.sub, p.artist ?? ""].some((v) => v.toLowerCase().includes(q))),
     };
-  }, [q, tracks, artists, playlists]);
+  }, [q, tracks, artists, playlists, albums]);
   const totalResults = results
     ? results.tracks.length + results.artists.length + results.albums.length + results.playlists.length
     : 0;
@@ -226,6 +211,7 @@ function RockyHome() {
             <HomeView
               tracks={tracks}
               playlists={playlists}
+              albums={albums}
               songsForAlbum={songsForAlbum}
               songsForPlaylist={songsForPlaylist}
             />
@@ -233,6 +219,7 @@ function RockyHome() {
             <LibraryView
               playlists={playlists}
               artists={artists}
+              albums={albums}
               songsForPlaylist={songsForPlaylist}
               songsForArtist={songsForArtist}
               songsForAlbum={songsForAlbum}
@@ -256,11 +243,13 @@ function RockyHome() {
 function HomeView({
   tracks,
   playlists,
+  albums,
   songsForAlbum,
   songsForPlaylist,
 }: {
   tracks: Track[];
   playlists: Playlist[];
+  albums: Album[];
   songsForAlbum: (t: string) => Track[];
   songsForPlaylist: (p: Playlist) => Track[];
 }) {
@@ -310,12 +299,14 @@ function HomeView({
 function LibraryView({
   playlists,
   artists,
+  albums,
   songsForPlaylist,
   songsForArtist,
   songsForAlbum,
 }: {
   playlists: Playlist[];
   artists: Artist[];
+  albums: Album[];
   songsForPlaylist: (p: Playlist) => Track[];
   songsForArtist: (n: string) => Track[];
   songsForAlbum: (t: string) => Track[];
